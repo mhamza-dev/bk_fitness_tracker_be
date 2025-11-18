@@ -77,7 +77,7 @@ export const getLatestWeight = async (req, res) => {
             .sort({ date: -1 });
 
         if (!weight) {
-            return res.status(404).json({ msg: 'No weight entries found' });
+            return res.json(null);
         }
 
         res.json(weight);

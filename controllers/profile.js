@@ -9,7 +9,7 @@ export const getProfile = async (req, res) => {
             .populate('userId', 'name email');
 
         if (!profile) {
-            return res.status(404).json({ msg: 'Profile not found' });
+            return res.json(null);
         }
 
         res.json(profile);
