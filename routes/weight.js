@@ -5,6 +5,7 @@ import {
     getWeights,
     getWeightById,
     getLatestWeight,
+    getWeightProgress,
     createWeight,
     updateWeight,
     deleteWeight
@@ -12,6 +13,7 @@ import {
 
 // All routes are protected with auth middleware
 router.get('/latest', auth, getLatestWeight);
+router.get('/progress', auth, getWeightProgress);
 router.get('/', auth, getWeights);
 router.get('/:id', auth, getWeightById);
 router.post('/', auth, createWeight);

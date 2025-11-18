@@ -70,7 +70,7 @@ export const getFitnessDataByDate = async (req, res) => {
         }).populate('userId', 'name email');
 
         if (!fitnessData) {
-            return res.status(404).json({ msg: 'Fitness data not found for this date' });
+            return res.json(null);
         }
 
         res.json(fitnessData);
@@ -113,8 +113,8 @@ export const createFitnessData = async (req, res) => {
         });
 
         if (existingData) {
-            return res.status(400).json({ 
-                msg: 'Fitness data already exists for this date. Use PUT to update instead.' 
+            return res.status(400).json({
+                msg: 'Fitness data already exists for this date. Use PUT to update instead.'
             });
         }
 
@@ -140,8 +140,8 @@ export const createFitnessData = async (req, res) => {
     } catch (err) {
         console.error(err.message);
         if (err.code === 11000) {
-            return res.status(400).json({ 
-                msg: 'Fitness data already exists for this date. Use PUT to update instead.' 
+            return res.status(400).json({
+                msg: 'Fitness data already exists for this date. Use PUT to update instead.'
             });
         }
         if (err.name === 'ValidationError') {
@@ -202,8 +202,8 @@ export const updateFitnessData = async (req, res) => {
             return res.status(404).json({ msg: 'Fitness data not found' });
         }
         if (err.code === 11000) {
-            return res.status(400).json({ 
-                msg: 'Fitness data already exists for this date' 
+            return res.status(400).json({
+                msg: 'Fitness data already exists for this date'
             });
         }
         if (err.name === 'ValidationError') {

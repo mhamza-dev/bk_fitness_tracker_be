@@ -205,3 +205,91 @@ export const deleteWeight = async (req, res) => {
     }
 };
 
+// @route   GET /api/weights/progress
+// @desc    Get weight progress over a period of days
+// @access  Private
+export const getWeightProgress = async (req, res) => {
+    try {
+        const { days = 30 } = req.query;
+        const daysNum = parseInt(days);
+
+        // Calculate start date
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - daysNum);
+
+        const weights = await Weight.find({
+            userId: req.user.id,
+            date: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        })
+            .sort({ date: 1 })
+            .limit(100);
+
+        if (weights.length === 0) {
+            return res.json({
+                progress: [],
+                summary: {
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString(),
+                    days: daysNum,
+                    entries: 0,
+                    change: null,
+                    averageWeight: null
+                }
+            });
+        }
+
+        // Calculate progress metrics
+        const firstWeight = weights[0];
+        const lastWeight = weights[weights.length - 1];
+        const weightChange = lastWeight.weight - firstWeight.weight;
+        const averageWeight = weights.reduce((sum, w) => sum + w.weight, 0) / weights.length;
+
+        // Format progress data
+        const progress = weights.map(w => ({
+            date: w.date,
+            weight: w.weight,
+            unit: w.unit,
+            bodyFat: w.bodyFat,
+            muscleMass: w.muscleMass
+        }));
+
+        res.json({
+            progress,
+            summary: {
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+                days: daysNum,
+                entries: weights.length,
+                change: {
+                    value: weightChange,
+                    unit: lastWeight.unit,
+                    percentage: firstWeight.weight > 0
+                        ? ((weightChange / firstWeight.weight) * 100).toFixed(2)
+                        : 0
+                },
+                averageWeight: {
+                    value: Math.round(averageWeight * 100) / 100,
+                    unit: lastWeight.unit
+                },
+                firstWeight: {
+                    value: firstWeight.weight,
+                    unit: firstWeight.unit,
+                    date: firstWeight.date
+                },
+                lastWeight: {
+                    value: lastWeight.weight,
+                    unit: lastWeight.unit,
+                    date: lastWeight.date
+                }
+            }
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
