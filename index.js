@@ -1,9 +1,15 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import connectDB from './config/db.js';
-import authRoutes from './routes/auth.js';
-import dietPlanRoutes from './routes/dietPlan.js';
-import fitnessDataRoutes from './routes/fitnessData.js';
+import {
+    authRoutes,
+    dietPlanRoutes,
+    fitnessDataRoutes,
+    foodRoutes,
+    mealRoutes,
+    profileRoutes,
+    weightRoutes
+} from './routes/index.js';
 
 dotenv.config();
 
@@ -16,6 +22,10 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/diet-plans', dietPlanRoutes);
 app.use('/api/fitness-data', fitnessDataRoutes);
+app.use('/api/foods', foodRoutes);
+app.use('/api/meals', mealRoutes);
+app.use('/api/profiles', profileRoutes);
+app.use('/api/weights', weightRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');

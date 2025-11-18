@@ -1,4 +1,4 @@
-import DietPlan from '../models/DietPlan.js';
+import { DietPlan } from '../models/index.js';
 
 // @route   GET /api/diet-plans
 // @desc    Get all diet plans for the authenticated user

@@ -1,4 +1,4 @@
-import FitnessData from '../models/FitnessData.js';
+import { FitnessData } from '../models/index.js';
 
 // @route   GET /api/fitness-data
 // @desc    Get all fitness data for the authenticated user

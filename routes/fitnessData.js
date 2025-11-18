@@ -1,6 +1,6 @@
 import express from 'express';
 const router = express.Router();
-import { auth } from '../middleware/auth.js';
+import { auth } from '../middleware/index.js';
 import {
     getFitnessData,
     getFitnessDataById,
@@ -9,7 +9,7 @@ import {
     updateFitnessData,
     upsertFitnessDataByDate,
     deleteFitnessData
-} from '../controllers/fitnessData.js';
+} from '../controllers/index.js';
 
 // All routes are protected with auth middleware
 router.get('/', auth, getFitnessData);
