@@ -5,4 +5,8 @@ export * from './food.js';
 export * from './meal.js';
 export * from './profile.js';
 export * from './weight.js';
+export * from './post.js';
+export * from './comment.js';
+export * from './like.js';
+export * from './follow.js';
 

@@ -8,7 +8,11 @@ import {
     foodRoutes,
     mealRoutes,
     profileRoutes,
-    weightRoutes
+    weightRoutes,
+    postRoutes,
+    commentRoutes,
+    likeRoutes,
+    followRoutes
 } from './routes/index.js';
 
 dotenv.config();
@@ -26,6 +30,10 @@ app.use('/api/foods', foodRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/weights', weightRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/likes', likeRoutes);
+app.use('/api/follow', followRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');
