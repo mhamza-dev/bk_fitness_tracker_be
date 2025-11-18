@@ -7,7 +7,8 @@ import {
     createFood,
     updateFood,
     deleteFood,
-    searchFoods
+    searchFoods,
+    getFoodsForProfile
 } from '../controllers/index.js';
 
 // All routes are protected with auth middleware

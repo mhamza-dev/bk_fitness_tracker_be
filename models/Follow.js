@@ -7,20 +7,17 @@ const followSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User',
         required: true,
-        index: true,
     },
     followingId: {
         type: Schema.Types.ObjectId,
         ref: 'User',
         required: true,
-        index: true,
     },
 }, {
     timestamps: true,
 });
 
 // Indexes
-followSchema.index({ followerId: 1, followingId: 1 });
 followSchema.index({ followingId: 1 });
 
 // Compound unique index to prevent duplicate follows

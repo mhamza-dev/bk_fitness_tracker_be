@@ -1,4 +1,4 @@
-import { Food } from '../models/index.js';
+import { Food, Profile } from '../models/index.js';
 
 // @route   GET /api/foods
 // @desc    Get all foods with optional filters

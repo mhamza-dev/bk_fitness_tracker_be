@@ -9,7 +9,6 @@ const foodSchema = new Schema({
         required: true,
         trim: true,
         unique: true,
-        index: true,
     },
     nameUrdu: {
         type: String,
@@ -55,7 +54,6 @@ const foodSchema = new Schema({
         type: String,
         enum: ['bread', 'rice', 'curry', 'meat', 'vegetable', 'dal', 'snack', 'dessert', 'beverage', 'fast_food', 'fried', 'seafood', 'salad', 'other'],
         default: 'other',
-        index: true,
     },
     mealType: {
         type: [String],

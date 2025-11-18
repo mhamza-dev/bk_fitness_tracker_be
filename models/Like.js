@@ -7,7 +7,6 @@ const likeSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User',
         required: true,
-        index: true,
     },
     // Can like posts or comments
     postId: {
@@ -25,12 +24,10 @@ const likeSchema = new Schema({
 });
 
 // Indexes
-likeSchema.index({ userId: 1, postId: 1 });
-likeSchema.index({ userId: 1, commentId: 1 });
 likeSchema.index({ postId: 1 });
 likeSchema.index({ commentId: 1 });
 
-// Compound unique index to prevent duplicate likes
+// Compound unique indexes to prevent duplicate likes
 likeSchema.index({ userId: 1, postId: 1 }, { 
     unique: true, 
     sparse: true,
