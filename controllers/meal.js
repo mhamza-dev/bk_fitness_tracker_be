@@ -226,3 +226,115 @@ export const deleteMeal = async (req, res) => {
     }
 };
 
+// @route   GET /api/meals/nutrition/:date
+// @desc    Get daily nutrition summary for a specific date
+// @access  Private
+export const getDailyNutrition = async (req, res) => {
+    try {
+        const date = new Date(req.params.date);
+        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+
+        const meals = await Meal.find({
+            userId: req.user.id,
+            date: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            }
+        });
+
+        const nutrition = {
+            totalCalories: meals.reduce((sum, meal) => sum + (meal.totalCalories || 0), 0),
+            totalProtein: meals.reduce((sum, meal) => sum + (meal.totalProtein || 0), 0),
+            totalCarbs: meals.reduce((sum, meal) => sum + (meal.totalCarbs || 0), 0),
+            totalFats: meals.reduce((sum, meal) => sum + (meal.totalFats || 0), 0),
+            mealsCount: meals.length,
+            meals: meals
+        };
+
+        res.json(nutrition);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   GET /api/meals/nutrition-summary
+// @desc    Get nutrition summary for a date range
+// @access  Private
+export const getNutritionSummary = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ msg: 'Please provide startDate and endDate' });
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        const meals = await Meal.find({
+            userId: req.user.id,
+            date: {
+                $gte: start,
+                $lte: end
+            }
+        }).sort({ date: 1 });
+
+        // Group by date
+        const dailySummaries = {};
+        meals.forEach(meal => {
+            const dateKey = meal.date.toISOString().split('T')[0];
+            if (!dailySummaries[dateKey]) {
+                dailySummaries[dateKey] = {
+                    date: dateKey,
+                    totalCalories: 0,
+                    totalProtein: 0,
+                    totalCarbs: 0,
+                    totalFats: 0,
+                    mealsCount: 0
+                };
+            }
+            dailySummaries[dateKey].totalCalories += meal.totalCalories || 0;
+            dailySummaries[dateKey].totalProtein += meal.totalProtein || 0;
+            dailySummaries[dateKey].totalCarbs += meal.totalCarbs || 0;
+            dailySummaries[dateKey].totalFats += meal.totalFats || 0;
+            dailySummaries[dateKey].mealsCount += 1;
+        });
+
+        // Calculate averages
+        const days = Object.keys(dailySummaries).length;
+        const totals = Object.values(dailySummaries).reduce((acc, day) => {
+            acc.calories += day.totalCalories;
+            acc.protein += day.totalProtein;
+            acc.carbs += day.totalCarbs;
+            acc.fats += day.totalFats;
+            return acc;
+        }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
+
+        res.json({
+            summary: {
+                period: { startDate, endDate },
+                days,
+                averageDaily: {
+                    calories: days > 0 ? Math.round(totals.calories / days) : 0,
+                    protein: days > 0 ? Math.round(totals.protein / days) : 0,
+                    carbs: days > 0 ? Math.round(totals.carbs / days) : 0,
+                    fats: days > 0 ? Math.round(totals.fats / days) : 0
+                },
+                totals: {
+                    calories: totals.calories,
+                    protein: totals.protein,
+                    carbs: totals.carbs,
+                    fats: totals.fats
+                }
+            },
+            daily: Object.values(dailySummaries)
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+

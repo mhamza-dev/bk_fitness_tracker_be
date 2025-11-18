@@ -261,13 +261,17 @@ export const deleteFood = async (req, res) => {
     }
 };
 
-// @route   GET /api/foods/search/:query
-// @desc    Search foods by name (alternative search endpoint)
+// @route   GET /api/foods/search
+// @desc    Search foods by name (query parameter)
 // @access  Private
 export const searchFoods = async (req, res) => {
     try {
-        const query = req.params.query;
-        const { limit } = req.query;
+        const { q: query, limit } = req.query;
+
+        if (!query) {
+            return res.status(400).json({ msg: 'Please provide search query (q parameter)' });
+        }
+
         const limitNum = limit ? parseInt(limit) : 20;
 
         const foods = await Food.find({
@@ -279,6 +283,67 @@ export const searchFoods = async (req, res) => {
         })
             .sort({ name: 1 })
             .limit(limitNum);
+
+        res.json(foods);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   GET /api/foods/for-profile
+// @desc    Get foods filtered by user's profile preferences
+// @access  Private
+export const getFoodsForProfile = async (req, res) => {
+    try {
+        const profile = await Profile.findOne({ userId: req.user.id });
+
+        const query = {};
+
+        if (profile) {
+            if (profile.dietaryPreferences.includes('vegetarian')) {
+                query.isVegetarian = true;
+            }
+            if (profile.dietaryPreferences.includes('vegan')) {
+                query.isVegan = true;
+            }
+            if (profile.dietaryPreferences.includes('gluten_free')) {
+                query.isGlutenFree = true;
+            }
+            if (profile.dietaryPreferences.includes('dairy_free')) {
+                query.isDairyFree = true;
+            }
+
+            // Exclude foods with allergens that user is allergic to
+            if (profile.allergies && profile.allergies.length > 0) {
+                const allergenNames = profile.allergies.map(a => a.name.toLowerCase());
+                const allergenMap = {
+                    'wheat': 'wheat',
+                    'dairy': 'dairy',
+                    'nuts': 'nuts',
+                    'eggs': 'eggs',
+                    'soy': 'soy',
+                    'fish': 'fish',
+                    'shellfish': 'shellfish',
+                    'sesame': 'sesame'
+                };
+
+                const allergensToExclude = [];
+                allergenNames.forEach(name => {
+                    if (allergenMap[name]) {
+                        allergensToExclude.push(allergenMap[name]);
+                    }
+                });
+
+                if (allergensToExclude.length > 0) {
+                    query.allergens = { $nin: allergensToExclude };
+                }
+            }
+        }
+
+        const foods = await Food.find(query)
+            .sort({ name: 1 })
+            .limit(100);
 
         res.json(foods);
     } catch (err) {

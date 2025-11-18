@@ -102,6 +102,42 @@ export const resetPassword = async (req, res) => {
     res.send('Reset password route');
 };
 
+export const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ msg: 'Please provide current password and new password' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ msg: 'New password must be at least 6 characters long' });
+        }
+
+        const user = await User.findById(req.user.id).select('+password');
+
+        if (!user) {
+            return res.status(404).json({ msg: 'User not found' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+        if (!isMatch) {
+            return res.status(400).json({ msg: 'Current password is incorrect' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        await user.save();
+
+        res.json({ msg: 'Password changed successfully' });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
 export const getMeUser = async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password');

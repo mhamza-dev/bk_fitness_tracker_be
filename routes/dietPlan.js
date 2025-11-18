@@ -17,7 +17,7 @@ import {
 // Note: Order matters - specific routes must come before parameterized routes
 router.get('/active', auth, getActiveDietPlan);
 router.get('/user', auth, getUserDietPlans);
-router.post('/suggestions', auth, generateDietPlanSuggestions);
+router.post('/generate-suggestions', auth, generateDietPlanSuggestions);
 router.get('/', auth, getDietPlans);
 router.get('/:id', auth, getDietPlanById);
 router.post('/', auth, createDietPlan);

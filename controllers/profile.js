@@ -150,3 +150,158 @@ export const deleteProfile = async (req, res) => {
     }
 };
 
+// @route   POST /api/profiles/allergies
+// @desc    Add an allergy to profile
+// @access  Private
+export const addAllergy = async (req, res) => {
+    try {
+        const { name, severity, notes } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ msg: 'Please provide allergy name' });
+        }
+
+        let profile = await Profile.findOne({ userId: req.user.id });
+
+        if (!profile) {
+            return res.status(404).json({ msg: 'Profile not found. Create a profile first.' });
+        }
+
+        // Check if allergy already exists
+        const existingAllergy = profile.allergies.find(a => a.name.toLowerCase() === name.toLowerCase());
+        if (existingAllergy) {
+            return res.status(400).json({ msg: 'Allergy already exists' });
+        }
+
+        profile.allergies.push({ name, severity: severity || 'moderate', notes });
+        await profile.save();
+
+        res.json(profile);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   DELETE /api/profiles/allergies
+// @desc    Remove an allergy from profile
+// @access  Private
+export const removeAllergy = async (req, res) => {
+    try {
+        const { name } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ msg: 'Please provide allergy name' });
+        }
+
+        const profile = await Profile.findOne({ userId: req.user.id });
+
+        if (!profile) {
+            return res.status(404).json({ msg: 'Profile not found' });
+        }
+
+        profile.allergies = profile.allergies.filter(a => a.name.toLowerCase() !== name.toLowerCase());
+        await profile.save();
+
+        res.json(profile);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   POST /api/profiles/physical-issues
+// @desc    Add a physical issue to profile
+// @access  Private
+export const addPhysicalIssue = async (req, res) => {
+    try {
+        const { name, type, notes } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ msg: 'Please provide physical issue name' });
+        }
+
+        let profile = await Profile.findOne({ userId: req.user.id });
+
+        if (!profile) {
+            return res.status(404).json({ msg: 'Profile not found. Create a profile first.' });
+        }
+
+        // Check if issue already exists
+        const existingIssue = profile.physicalIssues.find(i => i.name.toLowerCase() === name.toLowerCase());
+        if (existingIssue) {
+            return res.status(400).json({ msg: 'Physical issue already exists' });
+        }
+
+        profile.physicalIssues.push({ name, type: type || 'condition', notes });
+        await profile.save();
+
+        res.json(profile);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   DELETE /api/profiles/physical-issues
+// @desc    Remove a physical issue from profile
+// @access  Private
+export const removePhysicalIssue = async (req, res) => {
+    try {
+        const { name } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ msg: 'Please provide physical issue name' });
+        }
+
+        const profile = await Profile.findOne({ userId: req.user.id });
+
+        if (!profile) {
+            return res.status(404).json({ msg: 'Profile not found' });
+        }
+
+        profile.physicalIssues = profile.physicalIssues.filter(i => i.name.toLowerCase() !== name.toLowerCase());
+        await profile.save();
+
+        res.json(profile);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   PUT /api/profiles/weight-height
+// @desc    Update weight and height in profile
+// @access  Private
+export const updateWeightHeight = async (req, res) => {
+    try {
+        const { weight, height, weightUnit, heightUnit } = req.body;
+
+        if (!weight || !height) {
+            return res.status(400).json({ msg: 'Please provide weight and height' });
+        }
+
+        let profile = await Profile.findOne({ userId: req.user.id });
+
+        if (!profile) {
+            return res.status(404).json({ msg: 'Profile not found. Create a profile first.' });
+        }
+
+        if (weight !== undefined) profile.weight = weight;
+        if (height !== undefined) profile.height = height;
+        if (weightUnit !== undefined) profile.weightUnit = weightUnit;
+        if (heightUnit !== undefined) profile.heightUnit = heightUnit;
+
+        await profile.save();
+        await profile.populate('userId', 'name email');
+
+        res.json(profile);
+    } catch (err) {
+        console.error(err.message);
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ msg: err.message });
+        }
+        res.status(500).send('Server error');
+    }
+};
+

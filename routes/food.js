@@ -11,7 +11,8 @@ import {
 } from '../controllers/index.js';
 
 // All routes are protected with auth middleware
-router.get('/search/:query', auth, searchFoods);
+router.get('/search', auth, searchFoods);
+router.get('/for-profile', auth, getFoodsForProfile);
 router.get('/', auth, getFoods);
 router.get('/:id', auth, getFoodById);
 router.post('/', auth, createFood);
