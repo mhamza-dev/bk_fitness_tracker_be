@@ -46,7 +46,7 @@ commentSchema.index({ postId: 1, createdAt: -1 });
 commentSchema.index({ userId: 1 });
 commentSchema.index({ parentCommentId: 1 });
 
-const Comment = mongoose.models.Comment || mongoose.model('Comment', commentSchema);
+const Comment = mongoose.models.Comment || mongoose.model('Comment', commentSchema, 'comments');
 
 export default Comment;
 

@@ -98,7 +98,7 @@ fitnessDataSchema.index({ date: -1 });
 // Compound unique index to prevent duplicate entries for same user and date
 fitnessDataSchema.index({ userId: 1, date: 1 }, { unique: true });
 
-const FitnessData = mongoose.models.FitnessData || mongoose.model('FitnessData', fitnessDataSchema);
+const FitnessData = mongoose.models.FitnessData || mongoose.model('FitnessData', fitnessDataSchema, 'fitness_data');
 
 export default FitnessData;
 

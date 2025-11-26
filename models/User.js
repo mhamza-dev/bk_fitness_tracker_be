@@ -54,6 +54,6 @@ userSchema.statics.findByEmail = function (email) {
     return this.findOne({ email: email.toLowerCase() });
 };
 
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema, 'users');
 
 export default User;

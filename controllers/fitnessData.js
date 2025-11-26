@@ -81,7 +81,7 @@ export const getFitnessDataByDate = async (req, res) => {
 };
 
 // @route   POST /api/fitness-data
-// @desc    Create a new fitness data entry
+// @desc    Create or update fitness data entry (upsert)
 // @access  Private
 export const createFitnessData = async (req, res) => {
     try {
@@ -99,12 +99,12 @@ export const createFitnessData = async (req, res) => {
             notes
         } = req.body;
 
-        // Check if fitness data already exists for this date
+        // Use upsert behavior - create or update
         const dateToUse = date ? new Date(date) : new Date();
         const startOfDay = new Date(dateToUse.setHours(0, 0, 0, 0));
         const endOfDay = new Date(dateToUse.setHours(23, 59, 59, 999));
 
-        const existingData = await FitnessData.findOne({
+        let fitnessData = await FitnessData.findOne({
             userId: req.user.id,
             date: {
                 $gte: startOfDay,
@@ -112,36 +112,45 @@ export const createFitnessData = async (req, res) => {
             }
         });
 
-        if (existingData) {
-            return res.status(400).json({
-                msg: 'Fitness data already exists for this date. Use PUT to update instead.'
+        if (fitnessData) {
+            // Update existing entry
+            if (steps !== undefined) fitnessData.steps = steps;
+            if (distance !== undefined) fitnessData.distance = distance;
+            if (distanceUnit !== undefined) fitnessData.distanceUnit = distanceUnit;
+            if (caloriesBurned !== undefined) fitnessData.caloriesBurned = caloriesBurned;
+            if (workouts !== undefined) fitnessData.workouts = workouts;
+            if (waterIntake !== undefined) fitnessData.waterIntake = waterIntake;
+            if (waterUnit !== undefined) fitnessData.waterUnit = waterUnit;
+            if (sleepHours !== undefined) fitnessData.sleepHours = sleepHours;
+            if (sleepQuality !== undefined) fitnessData.sleepQuality = sleepQuality;
+            if (notes !== undefined) fitnessData.notes = notes;
+        } else {
+            // Create new entry
+            fitnessData = new FitnessData({
+                userId: req.user.id,
+                date: dateToUse,
+                steps: steps || 0,
+                distance: distance || 0,
+                distanceUnit: distanceUnit || 'km',
+                caloriesBurned: caloriesBurned || 0,
+                workouts: workouts || [],
+                waterIntake: waterIntake || 0,
+                waterUnit: waterUnit || 'ml',
+                sleepHours,
+                sleepQuality,
+                notes
             });
         }
-
-        const fitnessData = new FitnessData({
-            userId: req.user.id,
-            date: dateToUse,
-            steps: steps || 0,
-            distance: distance || 0,
-            distanceUnit: distanceUnit || 'km',
-            caloriesBurned: caloriesBurned || 0,
-            workouts: workouts || [],
-            waterIntake: waterIntake || 0,
-            waterUnit: waterUnit || 'ml',
-            sleepHours,
-            sleepQuality,
-            notes
-        });
 
         await fitnessData.save();
         await fitnessData.populate('userId', 'name email');
 
-        res.status(201).json(fitnessData);
+        res.json(fitnessData);
     } catch (err) {
         console.error(err.message);
         if (err.code === 11000) {
             return res.status(400).json({
-                msg: 'Fitness data already exists for this date. Use PUT to update instead.'
+                msg: 'Fitness data already exists for this date'
             });
         }
         if (err.name === 'ValidationError') {
@@ -282,6 +291,304 @@ export const upsertFitnessDataByDate = async (req, res) => {
         if (err.name === 'ValidationError') {
             return res.status(400).json({ msg: err.message });
         }
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   GET /api/fitness-data/range
+// @desc    Get fitness data for a date range
+// @access  Private
+export const getFitnessDataRange = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ msg: 'Please provide startDate and endDate' });
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        const fitnessData = await FitnessData.find({
+            userId: req.user.id,
+            date: {
+                $gte: start,
+                $lte: end
+            }
+        })
+            .populate('userId', 'name email')
+            .sort({ date: 1 });
+
+        res.json(fitnessData);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   PUT /api/fitness-data/steps
+// @desc    Update steps for a specific date
+// @access  Private
+export const updateSteps = async (req, res) => {
+    try {
+        const { date, steps } = req.body;
+
+        if (!date || steps === undefined) {
+            return res.status(400).json({ msg: 'Please provide date and steps' });
+        }
+
+        const dateObj = new Date(date);
+        const startOfDay = new Date(dateObj.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(dateObj.setHours(23, 59, 59, 999));
+
+        let fitnessData = await FitnessData.findOne({
+            userId: req.user.id,
+            date: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            }
+        });
+
+        if (fitnessData) {
+            fitnessData.steps = steps;
+        } else {
+            fitnessData = new FitnessData({
+                userId: req.user.id,
+                date: dateObj,
+                steps: steps
+            });
+        }
+
+        await fitnessData.save();
+        await fitnessData.populate('userId', 'name email');
+
+        res.json(fitnessData);
+    } catch (err) {
+        console.error(err.message);
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ msg: err.message });
+        }
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   POST /api/fitness-data/workouts
+// @desc    Add a workout to fitness data for a specific date
+// @access  Private
+export const addWorkout = async (req, res) => {
+    try {
+        const { date, workout } = req.body;
+
+        if (!date || !workout) {
+            return res.status(400).json({ msg: 'Please provide date and workout' });
+        }
+
+        const dateObj = new Date(date);
+        const startOfDay = new Date(dateObj.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(dateObj.setHours(23, 59, 59, 999));
+
+        let fitnessData = await FitnessData.findOne({
+            userId: req.user.id,
+            date: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            }
+        });
+
+        if (fitnessData) {
+            fitnessData.workouts.push(workout);
+        } else {
+            fitnessData = new FitnessData({
+                userId: req.user.id,
+                date: dateObj,
+                workouts: [workout]
+            });
+        }
+
+        await fitnessData.save();
+        await fitnessData.populate('userId', 'name email');
+
+        res.json(fitnessData);
+    } catch (err) {
+        console.error(err.message);
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ msg: err.message });
+        }
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   PUT /api/fitness-data/water
+// @desc    Update water intake for a specific date
+// @access  Private
+export const updateWaterIntake = async (req, res) => {
+    try {
+        const { date, waterIntake, waterUnit = 'ml' } = req.body;
+
+        if (!date || waterIntake === undefined) {
+            return res.status(400).json({ msg: 'Please provide date and waterIntake' });
+        }
+
+        const dateObj = new Date(date);
+        const startOfDay = new Date(dateObj.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(dateObj.setHours(23, 59, 59, 999));
+
+        let fitnessData = await FitnessData.findOne({
+            userId: req.user.id,
+            date: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            }
+        });
+
+        if (fitnessData) {
+            fitnessData.waterIntake = waterIntake;
+            fitnessData.waterUnit = waterUnit;
+        } else {
+            fitnessData = new FitnessData({
+                userId: req.user.id,
+                date: dateObj,
+                waterIntake: waterIntake,
+                waterUnit: waterUnit
+            });
+        }
+
+        await fitnessData.save();
+        await fitnessData.populate('userId', 'name email');
+
+        res.json(fitnessData);
+    } catch (err) {
+        console.error(err.message);
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ msg: err.message });
+        }
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   PUT /api/fitness-data/sleep
+// @desc    Update sleep data for a specific date
+// @access  Private
+export const updateSleep = async (req, res) => {
+    try {
+        const { date, sleepHours, sleepQuality } = req.body;
+
+        if (!date) {
+            return res.status(400).json({ msg: 'Please provide date' });
+        }
+
+        const dateObj = new Date(date);
+        const startOfDay = new Date(dateObj.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(dateObj.setHours(23, 59, 59, 999));
+
+        let fitnessData = await FitnessData.findOne({
+            userId: req.user.id,
+            date: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            }
+        });
+
+        if (fitnessData) {
+            if (sleepHours !== undefined) fitnessData.sleepHours = sleepHours;
+            if (sleepQuality !== undefined) fitnessData.sleepQuality = sleepQuality;
+        } else {
+            fitnessData = new FitnessData({
+                userId: req.user.id,
+                date: dateObj,
+                sleepHours: sleepHours,
+                sleepQuality: sleepQuality
+            });
+        }
+
+        await fitnessData.save();
+        await fitnessData.populate('userId', 'name email');
+
+        res.json(fitnessData);
+    } catch (err) {
+        console.error(err.message);
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ msg: err.message });
+        }
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   GET /api/fitness-data/stats
+// @desc    Get fitness statistics for a date range
+// @access  Private
+export const getFitnessStats = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ msg: 'Please provide startDate and endDate' });
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        const fitnessData = await FitnessData.find({
+            userId: req.user.id,
+            date: {
+                $gte: start,
+                $lte: end
+            }
+        }).sort({ date: 1 });
+
+        if (fitnessData.length === 0) {
+            return res.json({
+                period: { startDate, endDate },
+                days: 0,
+                totals: {
+                    steps: 0,
+                    distance: 0,
+                    caloriesBurned: 0,
+                    workouts: 0,
+                    waterIntake: 0,
+                    sleepHours: 0
+                },
+                averages: {
+                    steps: 0,
+                    distance: 0,
+                    caloriesBurned: 0,
+                    workouts: 0,
+                    waterIntake: 0,
+                    sleepHours: 0
+                }
+            });
+        }
+
+        const totals = fitnessData.reduce((acc, data) => {
+            acc.steps += data.steps || 0;
+            acc.distance += data.distance || 0;
+            acc.caloriesBurned += data.caloriesBurned || 0;
+            acc.workouts += data.workouts ? data.workouts.length : 0;
+            acc.waterIntake += data.waterIntake || 0;
+            acc.sleepHours += data.sleepHours || 0;
+            return acc;
+        }, { steps: 0, distance: 0, caloriesBurned: 0, workouts: 0, waterIntake: 0, sleepHours: 0 });
+
+        const days = fitnessData.length;
+        const averages = {
+            steps: Math.round(totals.steps / days),
+            distance: Math.round((totals.distance / days) * 100) / 100,
+            caloriesBurned: Math.round(totals.caloriesBurned / days),
+            workouts: Math.round((totals.workouts / days) * 100) / 100,
+            waterIntake: Math.round((totals.waterIntake / days) * 100) / 100,
+            sleepHours: Math.round((totals.sleepHours / days) * 100) / 100
+        };
+
+        res.json({
+            period: { startDate, endDate },
+            days,
+            totals,
+            averages
+        });
+    } catch (err) {
+        console.error(err.message);
         res.status(500).send('Server error');
     }
 };

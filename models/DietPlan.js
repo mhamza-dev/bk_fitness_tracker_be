@@ -145,7 +145,7 @@ const dietPlanSchema = new Schema({
 dietPlanSchema.index({ userId: 1, isActive: 1 });
 dietPlanSchema.index({ startDate: -1 });
 
-const DietPlan = mongoose.models.DietPlan || mongoose.model('DietPlan', dietPlanSchema);
+const DietPlan = mongoose.models.DietPlan || mongoose.model('DietPlan', dietPlanSchema, 'diet_plans');
 
 export default DietPlan;
 

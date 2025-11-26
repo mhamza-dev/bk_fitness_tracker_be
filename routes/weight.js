@@ -5,6 +5,7 @@ import {
     getWeights,
     getWeightById,
     getLatestWeight,
+    getWeightStats,
     getWeightProgress,
     createWeight,
     updateWeight,
@@ -12,7 +13,9 @@ import {
 } from '../controllers/index.js';
 
 // All routes are protected with auth middleware
+// Note: Order matters - specific routes must come before parameterized routes
 router.get('/latest', auth, getLatestWeight);
+router.get('/stats', auth, getWeightStats);
 router.get('/progress', auth, getWeightProgress);
 router.get('/', auth, getWeights);
 router.get('/:id', auth, getWeightById);

@@ -56,7 +56,7 @@ const weightSchema = new Schema({
 weightSchema.index({ userId: 1, date: -1 });
 weightSchema.index({ date: -1 });
 
-const Weight = mongoose.models.Weight || mongoose.model('Weight', weightSchema);
+const Weight = mongoose.models.Weight || mongoose.model('Weight', weightSchema, 'weights');
 
 export default Weight;
 

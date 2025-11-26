@@ -51,7 +51,7 @@ likeSchema.pre('validate', function (next) {
     next();
 });
 
-const Like = mongoose.models.Like || mongoose.model('Like', likeSchema);
+const Like = mongoose.models.Like || mongoose.model('Like', likeSchema, 'likes');
 
 export default Like;
 

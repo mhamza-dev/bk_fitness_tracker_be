@@ -73,16 +73,28 @@ export const unfollowUser = async (req, res) => {
 export const getFollowers = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { limit = 50 } = req.query;
+        const { page = 1, limit = 20 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const follows = await Follow.find({ followingId: userId })
             .populate('followerId', 'name email')
             .sort({ createdAt: -1 })
+            .skip(skip)
             .limit(parseInt(limit));
 
         const followers = follows.map(f => f.followerId);
 
-        res.json(followers);
+        const total = await Follow.countDocuments({ followingId: userId });
+
+        res.json({
+            followers,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server error');
@@ -95,16 +107,28 @@ export const getFollowers = async (req, res) => {
 export const getFollowing = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { limit = 50 } = req.query;
+        const { page = 1, limit = 20 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const follows = await Follow.find({ followerId: userId })
             .populate('followingId', 'name email')
             .sort({ createdAt: -1 })
+            .skip(skip)
             .limit(parseInt(limit));
 
         const following = follows.map(f => f.followingId);
 
-        res.json(following);
+        const total = await Follow.countDocuments({ followerId: userId });
+
+        res.json({
+            following,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server error');

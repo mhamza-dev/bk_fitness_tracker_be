@@ -127,7 +127,7 @@ mealSchema.pre('save', function (next) {
     next();
 });
 
-const Meal = mongoose.models.Meal || mongoose.model('Meal', mealSchema);
+const Meal = mongoose.models.Meal || mongoose.model('Meal', mealSchema, 'meals');
 
 export default Meal;
 

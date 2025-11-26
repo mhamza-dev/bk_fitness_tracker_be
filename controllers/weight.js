@@ -21,22 +21,7 @@ export const getWeights = async (req, res) => {
             .sort({ date: -1 })
             .limit(limitNum);
 
-        // Calculate weight change if there are multiple entries
-        let weightChange = null;
-        if (weights.length > 1) {
-            const latest = weights[0];
-            const previous = weights[weights.length - 1];
-            weightChange = {
-                change: latest.weight - previous.weight,
-                unit: latest.unit,
-                percentage: ((latest.weight - previous.weight) / previous.weight * 100).toFixed(2)
-            };
-        }
-
-        res.json({
-            weights,
-            weightChange
-        });
+        res.json(weights);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server error');
@@ -201,6 +186,91 @@ export const deleteWeight = async (req, res) => {
         if (err.kind === 'ObjectId') {
             return res.status(404).json({ msg: 'Weight entry not found' });
         }
+        res.status(500).send('Server error');
+    }
+};
+
+// @route   GET /api/weights/stats
+// @desc    Get weight statistics for a date range
+// @access  Private
+export const getWeightStats = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ msg: 'Please provide startDate and endDate' });
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        const weights = await Weight.find({
+            userId: req.user.id,
+            date: {
+                $gte: start,
+                $lte: end
+            }
+        })
+            .sort({ date: 1 });
+
+        if (weights.length === 0) {
+            return res.json({
+                period: { startDate, endDate },
+                entries: 0,
+                firstWeight: null,
+                lastWeight: null,
+                change: null,
+                averageWeight: null,
+                minWeight: null,
+                maxWeight: null
+            });
+        }
+
+        const firstWeight = weights[0];
+        const lastWeight = weights[weights.length - 1];
+        const weightChange = lastWeight.weight - firstWeight.weight;
+        const averageWeight = weights.reduce((sum, w) => sum + w.weight, 0) / weights.length;
+        const minWeight = Math.min(...weights.map(w => w.weight));
+        const maxWeight = Math.max(...weights.map(w => w.weight));
+
+        res.json({
+            period: { startDate, endDate },
+            entries: weights.length,
+            firstWeight: {
+                value: firstWeight.weight,
+                unit: firstWeight.unit,
+                date: firstWeight.date
+            },
+            lastWeight: {
+                value: lastWeight.weight,
+                unit: lastWeight.unit,
+                date: lastWeight.date
+            },
+            change: {
+                value: weightChange,
+                unit: lastWeight.unit,
+                percentage: firstWeight.weight > 0
+                    ? ((weightChange / firstWeight.weight) * 100).toFixed(2)
+                    : 0
+            },
+            averageWeight: {
+                value: Math.round(averageWeight * 100) / 100,
+                unit: lastWeight.unit
+            },
+            minWeight: {
+                value: minWeight,
+                unit: lastWeight.unit,
+                date: weights.find(w => w.weight === minWeight).date
+            },
+            maxWeight: {
+                value: maxWeight,
+                unit: lastWeight.unit,
+                date: weights.find(w => w.weight === maxWeight).date
+            }
+        });
+    } catch (err) {
+        console.error(err.message);
         res.status(500).send('Server error');
     }
 };

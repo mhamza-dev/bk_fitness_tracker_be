@@ -12,7 +12,8 @@ import {
     postRoutes,
     commentRoutes,
     likeRoutes,
-    followRoutes
+    followRoutes,
+    notificationPreferencesRoutes
 } from './routes/index.js';
 
 dotenv.config();
@@ -34,6 +35,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/likes', likeRoutes);
 app.use('/api/follow', followRoutes);
+app.use('/api/notification-preferences', notificationPreferencesRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');

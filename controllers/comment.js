@@ -70,7 +70,8 @@ export const getPostComments = async (req, res) => {
 export const getCommentReplies = async (req, res) => {
     try {
         const { id } = req.params;
-        const { limit = 20 } = req.query;
+        const { page = 1, limit = 20 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const replies = await Comment.find({
             parentCommentId: id,
@@ -78,6 +79,7 @@ export const getCommentReplies = async (req, res) => {
         })
             .populate('userId', 'name email')
             .sort({ createdAt: 1 })
+            .skip(skip)
             .limit(parseInt(limit));
 
         // Get like status
@@ -94,7 +96,20 @@ export const getCommentReplies = async (req, res) => {
             isLiked: likedCommentIds.has(reply._id.toString())
         }));
 
-        res.json(repliesWithLikes);
+        const total = await Comment.countDocuments({
+            parentCommentId: id,
+            isDeleted: false
+        });
+
+        res.json({
+            replies: repliesWithLikes,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server error');

@@ -31,7 +31,7 @@ followSchema.pre('validate', function (next) {
     next();
 });
 
-const Follow = mongoose.models.Follow || mongoose.model('Follow', followSchema);
+const Follow = mongoose.models.Follow || mongoose.model('Follow', followSchema, 'follows');
 
 export default Follow;
 

@@ -96,13 +96,14 @@ export const updateProfile = async (req, res) => {
             physicalIssues,
             activityLevel,
             dietaryPreferences,
-            healthGoals
+            healthGoals,
+            avatar,
+            avatarEmoji
         } = req.body;
 
         let profile = await Profile.findOne({ userId: req.user.id });
-
         if (!profile) {
-            return res.status(404).json({ msg: 'Profile not found. Create a profile first.' });
+            return res.status(404).json({ msg: 'Profile not found' });
         }
 
         // Update fields
@@ -117,6 +118,8 @@ export const updateProfile = async (req, res) => {
         if (activityLevel !== undefined) profile.activityLevel = activityLevel;
         if (dietaryPreferences !== undefined) profile.dietaryPreferences = dietaryPreferences;
         if (healthGoals !== undefined) profile.healthGoals = healthGoals;
+        if (avatar !== undefined) profile.avatar = avatar;
+        if (avatarEmoji !== undefined) profile.avatarEmoji = avatarEmoji;
 
         await profile.save();
         await profile.populate('userId', 'name email');

@@ -123,7 +123,7 @@ foodSchema.index({ category: 1 });
 foodSchema.index({ isVegetarian: 1 });
 foodSchema.index({ mealType: 1 });
 
-const Food = mongoose.models.Food || mongoose.model('Food', foodSchema);
+const Food = mongoose.models.Food || mongoose.model('Food', foodSchema, 'foods');
 
 export default Food;
 

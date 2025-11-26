@@ -85,6 +85,14 @@ const profileSchema = new Schema({
     bmi: {
         type: Number,
     },
+    avatar: {
+        type: String,
+        trim: true,
+    },
+    avatarEmoji: {
+        type: String,
+        trim: true,
+    },
     // Health information
     allergies: {
         type: [allergySchema],
@@ -150,7 +158,7 @@ profileSchema.virtual('age').get(function () {
     return age;
 });
 
-const Profile = mongoose.models.Profile || mongoose.model('Profile', profileSchema);
+const Profile = mongoose.models.Profile || mongoose.model('Profile', profileSchema, 'profiles');
 
 export default Profile;
 
