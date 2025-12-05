@@ -89,10 +89,6 @@ const profileSchema = new Schema({
         type: String,
         trim: true,
     },
-    avatarEmoji: {
-        type: String,
-        trim: true,
-    },
     // Health information
     allergies: {
         type: [allergySchema],

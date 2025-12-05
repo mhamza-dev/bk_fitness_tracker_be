@@ -97,8 +97,7 @@ export const updateProfile = async (req, res) => {
             activityLevel,
             dietaryPreferences,
             healthGoals,
-            avatar,
-            avatarEmoji
+            avatar
         } = req.body;
 
         let profile = await Profile.findOne({ userId: req.user.id });
@@ -119,7 +118,6 @@ export const updateProfile = async (req, res) => {
         if (dietaryPreferences !== undefined) profile.dietaryPreferences = dietaryPreferences;
         if (healthGoals !== undefined) profile.healthGoals = healthGoals;
         if (avatar !== undefined) profile.avatar = avatar;
-        if (avatarEmoji !== undefined) profile.avatarEmoji = avatarEmoji;
 
         await profile.save();
         await profile.populate('userId', 'name email');
@@ -136,7 +134,7 @@ export const updateProfile = async (req, res) => {
 
 // @route   DELETE /api/profiles
 // @desc    Delete user profile
-// @access  Private
+// @access  Private                 
 export const deleteProfile = async (req, res) => {
     try {
         const profile = await Profile.findOne({ userId: req.user.id });

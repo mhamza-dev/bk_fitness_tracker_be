@@ -10,4 +10,5 @@ export * from './comment.js';
 export * from './like.js';
 export * from './follow.js';
 export * from './notificationPreferences.js';
+export * from './subscription.js';
 

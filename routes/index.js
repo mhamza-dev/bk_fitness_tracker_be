@@ -10,4 +10,5 @@ export { default as commentRoutes } from './comment.js';
 export { default as likeRoutes } from './like.js';
 export { default as followRoutes } from './follow.js';
 export { default as notificationPreferencesRoutes } from './notificationPreferences.js';
+export { default as subscriptionRoutes } from './subscription.js';
 

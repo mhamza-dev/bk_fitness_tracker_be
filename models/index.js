@@ -10,4 +10,5 @@ export { default as Comment } from './Comment.js';
 export { default as Like } from './Like.js';
 export { default as Follow } from './Follow.js';
 export { default as NotificationPreferences } from './NotificationPreferences.js';
+export { default as Subscription } from './Subscription.js';
 
