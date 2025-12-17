@@ -118,7 +118,7 @@ const foodSchema = new Schema({
 });
 
 // Indexes
-foodSchema.index({ name: 1 });
+// Note: name already has unique index from unique: true in schema
 foodSchema.index({ category: 1 });
 foodSchema.index({ isVegetarian: 1 });
 foodSchema.index({ mealType: 1 });

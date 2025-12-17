@@ -1,4 +1,38 @@
-import { Subscription } from '../models/index.js';
+import { Subscription, Profile, DietPlan } from '../models/index.js';
+import { generateDietPlan } from '../services/aiService.js';
+
+/**
+ * Get "today" date in user's timezone, normalized to UTC midnight
+ * @param {string} timezone - IANA timezone identifier (e.g., "America/Los_Angeles", "Asia/Karachi")
+ * @returns {Date} Date object normalized to UTC midnight for the calendar day in the user's timezone
+ */
+const getTodayInTimezone = (timezone = 'UTC') => {
+    try {
+        const now = new Date();
+        // Get date components in user's timezone
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        });
+        const parts = formatter.formatToParts(now);
+        const year = parseInt(parts.find(p => p.type === 'year').value, 10);
+        const month = parseInt(parts.find(p => p.type === 'month').value, 10) - 1; // Month is 0-indexed
+        const day = parseInt(parts.find(p => p.type === 'day').value, 10);
+
+        // Create UTC date at midnight for that calendar day
+        const today = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+        return today;
+    } catch (error) {
+        // If timezone is invalid, fallback to UTC
+        console.warn(`Invalid timezone "${timezone}", falling back to UTC`);
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        today.setUTCMilliseconds(0);
+        return today;
+    }
+};
 
 /**
  * Subscription Constants
@@ -157,6 +191,48 @@ export const purchaseSubscription = async (req, res) => {
             });
         }
 
+        // Generate personalized diet plan for today
+        try {
+            const profile = await Profile.findOne({ userId: req.user.id });
+            if (profile) {
+                // Get today's date in user's timezone
+                const today = getTodayInTimezone(profile.timezone);
+
+                // Check if diet plan already exists for today
+                const existingPlan = await DietPlan.findOne({
+                    userId: req.user.id,
+                    date: today,
+                });
+
+                if (!existingPlan) {
+                    const planData = await generateDietPlan(profile, today);
+                    await DietPlan.create({
+                        userId: req.user.id,
+                        profileId: profile._id,
+                        date: today,
+                        meals: planData.meals,
+                        dailyCalories: planData.dailyCalories,
+                        dailyProtein: planData.dailyProtein,
+                        dailyCarbs: planData.dailyCarbs,
+                        dailyFats: planData.dailyFats,
+                        generatedByAI: true,
+                    });
+                } else {
+                    const planData = await generateDietPlan(profile, today);
+                    existingPlan.meals = planData.meals;
+                    existingPlan.dailyCalories = planData.dailyCalories;
+                    existingPlan.dailyProtein = planData.dailyProtein;
+                    existingPlan.dailyCarbs = planData.dailyCarbs;
+                    existingPlan.dailyFats = planData.dailyFats;
+                    existingPlan.generatedByAI = true;
+                    await existingPlan.save();
+                }
+            }
+        } catch (dietPlanError) {
+            // Log error but don't fail the subscription purchase
+            console.error('Error generating diet plan:', dietPlanError.message);
+        }
+
         res.json({
             msg: 'Subscription purchased successfully',
             subscription: {
@@ -208,4 +284,3 @@ export const cancelSubscription = async (req, res) => {
         res.status(500).json({ msg: 'Server error' });
     }
 };
-

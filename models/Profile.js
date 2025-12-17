@@ -42,7 +42,6 @@ const profileSchema = new Schema({
         ref: 'User',
         required: true,
         unique: true,
-        index: true,
     },
     // Personal information
     dateOfBirth: {
@@ -113,6 +112,12 @@ const profileSchema = new Schema({
         type: [String],
         enum: ['weight_loss', 'weight_gain', 'muscle_gain', 'maintenance', 'improve_health', 'manage_condition'],
         default: [],
+    },
+    // Timezone for date calculations (IANA timezone identifier, e.g., "America/Los_Angeles", "Asia/Karachi")
+    timezone: {
+        type: String,
+        default: 'UTC',
+        trim: true,
     },
 }, {
     timestamps: true,

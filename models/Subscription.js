@@ -8,7 +8,6 @@ const subscriptionSchema = new Schema({
         ref: 'User',
         required: true,
         unique: true,
-        index: true,
     },
     planId: {
         type: String,

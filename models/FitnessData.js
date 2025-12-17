@@ -7,14 +7,12 @@ const fitnessDataSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User',
         required: true,
-        index: true,
     },
     // Date tracking
     date: {
         type: Date,
         required: true,
         default: Date.now,
-        index: true,
     },
     // Step tracking
     steps: {

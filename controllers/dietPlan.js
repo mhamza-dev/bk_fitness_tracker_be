@@ -1,158 +1,286 @@
-import { DietPlan, Profile, Food } from '../models/index.js';
+import { DietPlan, Profile, Subscription } from '../models/index.js';
+import { generateDietPlan } from '../services/aiService.js';
 
-// @route   GET /api/diet-plans
-// @desc    Get all diet plans for the authenticated user
-// @access  Private
-export const getDietPlans = async (req, res) => {
+/**
+ * Get "today" date in user's timezone, normalized to UTC midnight
+ * @param {string} timezone - IANA timezone identifier (e.g., "America/Los_Angeles", "Asia/Karachi")
+ * @returns {Date} Date object normalized to UTC midnight for the calendar day in the user's timezone
+ */
+const getTodayInTimezone = (timezone = 'UTC') => {
     try {
-        const dietPlans = await DietPlan.find({ userId: req.user.id })
-            .populate('userId', 'name email')
-            .populate('profileId')
-            .sort({ startDate: -1 });
+        const now = new Date();
+        // Get date components in user's timezone
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        });
+        const parts = formatter.formatToParts(now);
+        const year = parseInt(parts.find(p => p.type === 'year').value, 10);
+        const month = parseInt(parts.find(p => p.type === 'month').value, 10) - 1; // Month is 0-indexed
+        const day = parseInt(parts.find(p => p.type === 'day').value, 10);
 
-        res.json(dietPlans);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server error');
+        // Create UTC date at midnight for that calendar day
+        const today = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+        return today;
+    } catch (error) {
+        // If timezone is invalid, fallback to UTC
+        console.warn(`Invalid timezone "${timezone}", falling back to UTC`);
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        today.setUTCMilliseconds(0);
+        return today;
     }
 };
 
-// @route   GET /api/diet-plans/user
-// @desc    Get all diet plans for a user with options
+// @route   GET /api/diet-plans/today
+// @desc    Get today's diet plan for the authenticated user
 // @access  Private
-export const getUserDietPlans = async (req, res) => {
+export const getTodayDietPlan = async (req, res) => {
     try {
-        const { isActive, limit, sortBy = 'startDate', sortOrder = 'desc' } = req.query;
-        const query = { userId: req.user.id };
-
-        // Filter by active status if provided
-        if (isActive !== undefined) {
-            query.isActive = isActive === 'true';
+        // Check if user has active subscription
+        const subscription = await Subscription.findOne({ userId: req.user.id });
+        if (!subscription || !subscription.isActive()) {
+            return res.status(403).json({
+                msg: 'Active subscription required to access personalized diet plans'
+            });
         }
 
-        const limitNum = limit ? parseInt(limit) : undefined;
-        const sortOptions = {};
-        sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+        // Get profile to access timezone
+        const profile = await Profile.findOne({ userId: req.user.id });
+        if (!profile) {
+            return res.status(404).json({
+                msg: 'Profile not found. Please create a profile first.'
+            });
+        }
 
-        const dietPlans = await DietPlan.find(query)
-            .populate('userId', 'name email')
-            .populate('profileId')
-            .sort(sortOptions)
-            .limit(limitNum);
+        // Get today's date in user's timezone
+        const today = getTodayInTimezone(profile.timezone);
 
-        res.json(dietPlans);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server error');
-    }
-};
+        let dietPlan = await DietPlan.findOne({
+            userId: req.user.id,
+            date: today,
+        }).populate('profileId');
 
-// @route   GET /api/diet-plans/:id
-// @desc    Get a specific diet plan by ID
-// @access  Private
-export const getDietPlanById = async (req, res) => {
-    try {
-        const dietPlan = await DietPlan.findOne({
-            _id: req.params.id,
-            userId: req.user.id
-        })
-            .populate('userId', 'name email')
-            .populate('profileId');
-
+        // If no plan exists for today, generate one
         if (!dietPlan) {
-            return res.status(404).json({ msg: 'Diet plan not found' });
+            try {
+                const planData = await generateDietPlan(profile, today);
+
+                dietPlan = await DietPlan.create({
+                    userId: req.user.id,
+                    profileId: profile._id,
+                    date: today,
+                    meals: planData.meals,
+                    dailyCalories: planData.dailyCalories,
+                    dailyProtein: planData.dailyProtein,
+                    dailyCarbs: planData.dailyCarbs,
+                    dailyFats: planData.dailyFats,
+                    generatedByAI: true,
+                });
+
+                await dietPlan.populate('profileId');
+            } catch (error) {
+                console.error('Error generating diet plan:', error);
+                return res.status(500).json({ msg: 'Error generating diet plan' });
+            }
         }
 
         res.json(dietPlan);
     } catch (err) {
         console.error(err.message);
-        if (err.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Diet plan not found' });
-        }
-        res.status(500).send('Server error');
+        res.status(500).json({ msg: 'Server error' });
     }
 };
 
-// @route   POST /api/diet-plans
-// @desc    Create a new diet plan
+// @route   GET /api/diet-plans/date/:date
+// @desc    Get diet plan for a specific date (format: YYYY-MM-DD)
 // @access  Private
-export const createDietPlan = async (req, res) => {
+export const getDietPlanByDate = async (req, res) => {
     try {
-        const {
-            profileId,
-            name,
-            description,
-            startDate,
-            endDate,
-            isActive,
-            dailyMeals,
-            dailyCalories,
-            dailyProtein,
-            dailyCarbs,
-            dailyFats,
-            healthGoals,
-            dietaryRestrictions
-        } = req.body;
-
-        // Validate required fields
-        if (!name || !profileId || !dailyMeals || !dailyCalories) {
-            return res.status(400).json({ msg: 'Please provide all required fields' });
+        // Check if user has active subscription
+        const subscription = await Subscription.findOne({ userId: req.user.id });
+        if (!subscription || !subscription.isActive()) {
+            return res.status(403).json({
+                msg: 'Active subscription required to access personalized diet plans'
+            });
         }
 
-        const dietPlan = new DietPlan({
+        // Validate date format before querying database
+        const date = new Date(req.params.date);
+        if (isNaN(date.getTime())) {
+            return res.status(400).json({ msg: 'Invalid date format. Use YYYY-MM-DD' });
+        }
+
+        date.setUTCHours(0, 0, 0, 0);
+        date.setUTCMilliseconds(0);
+
+        const dietPlan = await DietPlan.findOne({
             userId: req.user.id,
-            profileId,
-            name,
-            description,
-            startDate: startDate || Date.now(),
-            endDate,
-            isActive: isActive !== undefined ? isActive : true,
-            dailyMeals,
-            dailyCalories,
-            dailyProtein: dailyProtein || 0,
-            dailyCarbs: dailyCarbs || 0,
-            dailyFats: dailyFats || 0,
-            healthGoals: healthGoals || [],
-            dietaryRestrictions: dietaryRestrictions || []
-        });
+            date: date,
+        }).populate('profileId');
 
-        await dietPlan.save();
-        await dietPlan.populate('userId', 'name email');
-        await dietPlan.populate('profileId');
+        if (!dietPlan) {
+            return res.status(404).json({ msg: 'Diet plan not found for this date' });
+        }
 
-        res.status(201).json(dietPlan);
+        res.json(dietPlan);
     } catch (err) {
         console.error(err.message);
-        if (err.name === 'ValidationError') {
-            return res.status(400).json({ msg: err.message });
+        if (err.name === 'CastError') {
+            return res.status(400).json({ msg: 'Invalid date format. Use YYYY-MM-DD' });
         }
-        res.status(500).send('Server error');
+        res.status(500).json({ msg: 'Server error' });
+    }
+};
+
+// @route   GET /api/diet-plans
+// @desc    Get all diet plans for the authenticated user (with optional date range)
+// @access  Private
+export const getDietPlans = async (req, res) => {
+    try {
+        // Check if user has active subscription
+        const subscription = await Subscription.findOne({ userId: req.user.id });
+        if (!subscription || !subscription.isActive()) {
+            return res.status(403).json({
+                msg: 'Active subscription required to access personalized diet plans'
+            });
+        }
+
+        const { startDate, endDate, limit } = req.query;
+        const query = { userId: req.user.id };
+
+        // Add date range filter if provided
+        if (startDate || endDate) {
+            query.date = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                if (isNaN(start.getTime())) {
+                    return res.status(400).json({ msg: 'Invalid startDate format. Use YYYY-MM-DD' });
+                }
+                start.setUTCHours(0, 0, 0, 0);
+                start.setUTCMilliseconds(0);
+                query.date.$gte = start;
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                if (isNaN(end.getTime())) {
+                    return res.status(400).json({ msg: 'Invalid endDate format. Use YYYY-MM-DD' });
+                }
+                end.setUTCHours(23, 59, 59, 999);
+                query.date.$lte = end;
+            }
+        }
+
+        // Validate and parse limit parameter
+        let limitNum = 30; // Default to 30 days
+        if (limit) {
+            const parsedLimit = parseInt(limit, 10);
+            if (isNaN(parsedLimit) || parsedLimit <= 0) {
+                return res.status(400).json({ msg: 'Invalid limit parameter. Must be a positive number' });
+            }
+            limitNum = parsedLimit;
+        }
+
+        const dietPlans = await DietPlan.find(query)
+            .populate('profileId')
+            .sort({ date: -1 })
+            .limit(limitNum);
+
+        res.json(dietPlans);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ msg: 'Server error' });
+    }
+};
+
+// @route   POST /api/diet-plans/generate
+// @desc    Generate or regenerate today's diet plan
+// @access  Private
+export const generateTodayDietPlan = async (req, res) => {
+    try {
+        // Check if user has active subscription
+        const subscription = await Subscription.findOne({ userId: req.user.id });
+        if (!subscription || !subscription.isActive()) {
+            return res.status(403).json({
+                msg: 'Active subscription required to generate personalized diet plans'
+            });
+        }
+
+        const profile = await Profile.findOne({ userId: req.user.id });
+        if (!profile) {
+            return res.status(404).json({
+                msg: 'Profile not found. Please create a profile first.'
+            });
+        }
+
+        // Get today's date in user's timezone
+        const today = getTodayInTimezone(profile.timezone);
+
+        // Generate new diet plan
+        const planData = await generateDietPlan(profile, today);
+
+        // Check if plan already exists and update, otherwise create
+        let dietPlan = await DietPlan.findOne({
+            userId: req.user.id,
+            date: today,
+        });
+
+        if (dietPlan) {
+            // Update existing plan
+            dietPlan.meals = planData.meals;
+            dietPlan.dailyCalories = planData.dailyCalories;
+            dietPlan.dailyProtein = planData.dailyProtein;
+            dietPlan.dailyCarbs = planData.dailyCarbs;
+            dietPlan.dailyFats = planData.dailyFats;
+            dietPlan.generatedByAI = true;
+            await dietPlan.save();
+            await dietPlan.populate('profileId');
+        } else {
+            // Create new plan
+            dietPlan = await DietPlan.create({
+                userId: req.user.id,
+                profileId: profile._id,
+                date: today,
+                meals: planData.meals,
+                dailyCalories: planData.dailyCalories,
+                dailyProtein: planData.dailyProtein,
+                dailyCarbs: planData.dailyCarbs,
+                dailyFats: planData.dailyFats,
+                generatedByAI: true,
+            });
+            await dietPlan.populate('profileId');
+        }
+
+        res.json({
+            msg: 'Diet plan generated successfully',
+            dietPlan,
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ msg: 'Server error' });
     }
 };
 
 // @route   PUT /api/diet-plans/:id
-// @desc    Update a diet plan
+// @desc    Update a diet plan (allow manual adjustments)
 // @access  Private
 export const updateDietPlan = async (req, res) => {
     try {
-        const {
-            name,
-            description,
-            startDate,
-            endDate,
-            isActive,
-            dailyMeals,
-            dailyCalories,
-            dailyProtein,
-            dailyCarbs,
-            dailyFats,
-            healthGoals,
-            dietaryRestrictions
-        } = req.body;
+        // Check if user has active subscription
+        const subscription = await Subscription.findOne({ userId: req.user.id });
+        if (!subscription || !subscription.isActive()) {
+            return res.status(403).json({
+                msg: 'Active subscription required to update diet plans'
+            });
+        }
 
-        let dietPlan = await DietPlan.findOne({
+        const { meals, dailyCalories, dailyProtein, dailyCarbs, dailyFats } = req.body;
+
+        const dietPlan = await DietPlan.findOne({
             _id: req.params.id,
-            userId: req.user.id
+            userId: req.user.id,
         });
 
         if (!dietPlan) {
@@ -160,21 +288,13 @@ export const updateDietPlan = async (req, res) => {
         }
 
         // Update fields
-        if (name !== undefined) dietPlan.name = name;
-        if (description !== undefined) dietPlan.description = description;
-        if (startDate !== undefined) dietPlan.startDate = startDate;
-        if (endDate !== undefined) dietPlan.endDate = endDate;
-        if (isActive !== undefined) dietPlan.isActive = isActive;
-        if (dailyMeals !== undefined) dietPlan.dailyMeals = dailyMeals;
+        if (meals !== undefined) dietPlan.meals = meals;
         if (dailyCalories !== undefined) dietPlan.dailyCalories = dailyCalories;
         if (dailyProtein !== undefined) dietPlan.dailyProtein = dailyProtein;
         if (dailyCarbs !== undefined) dietPlan.dailyCarbs = dailyCarbs;
         if (dailyFats !== undefined) dietPlan.dailyFats = dailyFats;
-        if (healthGoals !== undefined) dietPlan.healthGoals = healthGoals;
-        if (dietaryRestrictions !== undefined) dietPlan.dietaryRestrictions = dietaryRestrictions;
 
         await dietPlan.save();
-        await dietPlan.populate('userId', 'name email');
         await dietPlan.populate('profileId');
 
         res.json(dietPlan);
@@ -186,207 +306,7 @@ export const updateDietPlan = async (req, res) => {
         if (err.name === 'ValidationError') {
             return res.status(400).json({ msg: err.message });
         }
-        res.status(500).send('Server error');
-    }
-};
-
-// @route   GET /api/diet-plans/active
-// @desc    Get user's active diet plan
-// @access  Private
-export const getActiveDietPlan = async (req, res) => {
-    try {
-        const dietPlan = await DietPlan.findOne({
-            userId: req.user.id,
-            isActive: true
-        })
-            .populate('userId', 'name email')
-            .populate('profileId')
-            .sort({ startDate: -1 });
-
-        if (!dietPlan) {
-            return res.status(404).json({ msg: 'No active diet plan found' });
-        }
-
-        res.json(dietPlan);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server error');
-    }
-};
-
-// @route   PUT /api/diet-plans/:id/deactivate
-// @desc    Deactivate a diet plan
-// @access  Private
-export const deactivateDietPlan = async (req, res) => {
-    try {
-        const dietPlan = await DietPlan.findOne({
-            _id: req.params.id,
-            userId: req.user.id
-        });
-
-        if (!dietPlan) {
-            return res.status(404).json({ msg: 'Diet plan not found' });
-        }
-
-        dietPlan.isActive = false;
-        await dietPlan.save();
-        await dietPlan.populate('userId', 'name email');
-        await dietPlan.populate('profileId');
-
-        res.json({ 
-            msg: 'Diet plan deactivated successfully',
-            dietPlan 
-        });
-    } catch (err) {
-        console.error(err.message);
-        if (err.kind === 'ObjectId') {
-            return res.status(404).json({ msg: 'Diet plan not found' });
-        }
-        res.status(500).send('Server error');
-    }
-};
-
-// @route   POST /api/diet-plans/suggestions
-// @desc    Generate diet plan suggestions based on user profile
-// @access  Private
-export const generateDietPlanSuggestions = async (req, res) => {
-    try {
-        // Get user profile
-        const profile = await Profile.findOne({ userId: req.user.id });
-
-        if (!profile) {
-            return res.status(404).json({ 
-                msg: 'Profile not found. Please create a profile first.' 
-            });
-        }
-
-        // Calculate daily calorie needs based on profile
-        // Using Harris-Benedict equation (simplified)
-        const age = profile.age;
-        const weight = profile.weightUnit === 'kg' ? profile.weight : profile.weight * 0.453592;
-        // Convert height to cm
-        const heightInCm = profile.heightUnit === 'cm' ? profile.height : 
-                          profile.heightUnit === 'ft' ? profile.height * 30.48 : 
-                          profile.height * 2.54;
-
-        // BMR calculation (Harris-Benedict equation)
-        let bmr;
-        if (profile.gender === 'male') {
-            bmr = 88.362 + (13.397 * weight) + (4.799 * heightInCm) - (5.677 * age);
-        } else {
-            bmr = 447.593 + (9.247 * weight) + (3.098 * heightInCm) - (4.330 * age);
-        }
-
-        // Activity multiplier
-        const activityMultipliers = {
-            sedentary: 1.2,
-            lightly_active: 1.375,
-            moderately_active: 1.55,
-            very_active: 1.725,
-            extremely_active: 1.9
-        };
-
-        const dailyCalories = Math.round(bmr * (activityMultipliers[profile.activityLevel] || 1.55));
-
-        // Adjust based on health goals
-        let adjustedCalories = dailyCalories;
-        if (profile.healthGoals.includes('weight_loss')) {
-            adjustedCalories = Math.round(dailyCalories * 0.85); // 15% deficit
-        } else if (profile.healthGoals.includes('weight_gain')) {
-            adjustedCalories = Math.round(dailyCalories * 1.15); // 15% surplus
-        } else if (profile.healthGoals.includes('muscle_gain')) {
-            adjustedCalories = Math.round(dailyCalories * 1.1); // 10% surplus
-        }
-
-        // Calculate macronutrients (simplified)
-        const dailyProtein = Math.round(adjustedCalories * 0.25 / 4); // 25% from protein
-        const dailyCarbs = Math.round(adjustedCalories * 0.45 / 4); // 45% from carbs
-        const dailyFats = Math.round(adjustedCalories * 0.30 / 9); // 30% from fats
-
-        // Get food suggestions based on dietary preferences
-        const foodQuery = {};
-        if (profile.dietaryPreferences.includes('vegetarian')) {
-            foodQuery.isVegetarian = true;
-        }
-        if (profile.dietaryPreferences.includes('vegan')) {
-            foodQuery.isVegan = true;
-        }
-        if (profile.dietaryPreferences.includes('gluten_free')) {
-            foodQuery.isGlutenFree = true;
-        }
-        if (profile.dietaryPreferences.includes('dairy_free')) {
-            foodQuery.isDairyFree = true;
-        }
-
-        // Get suggested foods
-        const suggestedFoods = await Food.find(foodQuery)
-            .limit(50)
-            .sort({ calories: 1 });
-
-        // Generate meal suggestions (simplified structure)
-        const mealSuggestions = {
-            breakfast: suggestedFoods
-                .filter(f => f.mealType.includes('breakfast'))
-                .slice(0, 5)
-                .map(f => ({
-                    name: f.name,
-                    quantity: f.typicalServing,
-                    unit: f.servingUnit,
-                    calories: Math.round((f.calories * f.typicalServing) / 100)
-                })),
-            lunch: suggestedFoods
-                .filter(f => f.mealType.includes('lunch'))
-                .slice(0, 5)
-                .map(f => ({
-                    name: f.name,
-                    quantity: f.typicalServing,
-                    unit: f.servingUnit,
-                    calories: Math.round((f.calories * f.typicalServing) / 100)
-                })),
-            dinner: suggestedFoods
-                .filter(f => f.mealType.includes('dinner'))
-                .slice(0, 5)
-                .map(f => ({
-                    name: f.name,
-                    quantity: f.typicalServing,
-                    unit: f.servingUnit,
-                    calories: Math.round((f.calories * f.typicalServing) / 100)
-                })),
-            snack: suggestedFoods
-                .filter(f => f.mealType.includes('snack'))
-                .slice(0, 3)
-                .map(f => ({
-                    name: f.name,
-                    quantity: f.typicalServing,
-                    unit: f.servingUnit,
-                    calories: Math.round((f.calories * f.typicalServing) / 100)
-                }))
-        };
-
-        res.json({
-            suggestions: {
-                dailyCalories: adjustedCalories,
-                dailyProtein,
-                dailyCarbs,
-                dailyFats,
-                mealSuggestions,
-                basedOn: {
-                    profile: {
-                        age,
-                        weight: profile.weight,
-                        weightUnit: profile.weightUnit,
-                        height: profile.height,
-                        heightUnit: profile.heightUnit,
-                        activityLevel: profile.activityLevel,
-                        healthGoals: profile.healthGoals,
-                        dietaryPreferences: profile.dietaryPreferences
-                    }
-                }
-            }
-        });
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server error');
+        res.status(500).json({ msg: 'Server error' });
     }
 };
 
@@ -397,7 +317,7 @@ export const deleteDietPlan = async (req, res) => {
     try {
         const dietPlan = await DietPlan.findOne({
             _id: req.params.id,
-            userId: req.user.id
+            userId: req.user.id,
         });
 
         if (!dietPlan) {
@@ -406,13 +326,12 @@ export const deleteDietPlan = async (req, res) => {
 
         await dietPlan.deleteOne();
 
-        res.json({ msg: 'Diet plan removed' });
+        res.json({ msg: 'Diet plan deleted successfully' });
     } catch (err) {
         console.error(err.message);
         if (err.kind === 'ObjectId') {
             return res.status(404).json({ msg: 'Diet plan not found' });
         }
-        res.status(500).send('Server error');
+        res.status(500).json({ msg: 'Server error' });
     }
 };
-
